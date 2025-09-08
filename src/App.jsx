@@ -4,10 +4,12 @@ import LongPressCard from "./components/LongPressCard.jsx";
 export default function App() {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [pages, setPages] = useState("");
   const [books, setBooks] = useState([]);
   const [editingBook, setEditingBook] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAuthor, setEditAuthor] = useState("");
+  const [editPages, setEditPages] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterAuthor, setFilterAuthor] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); // 'all', 'unread', 'read'
@@ -97,12 +99,14 @@ export default function App() {
       id,
       title: title.trim(),
       author: author.trim(),
+      pages: pages.trim() ? parseInt(pages) || 0 : 0,
       read: false,
       addedAt: Date.now(),
     };
     setBooks([book, ...books]);
     setTitle("");
     setAuthor("");
+    setPages("");
   };
   const markRead = (book) => {
     setBooks((bs) =>
@@ -118,24 +122,32 @@ export default function App() {
     setEditingBook(book);
     setEditTitle(book.title);
     setEditAuthor(book.author);
+    setEditPages(book.pages || "");
   };
   const saveEdit = () => {
     if (!editTitle.trim()) return;
     setBooks((bs) =>
       bs.map((b) =>
         b.id === editingBook.id
-          ? { ...b, title: editTitle.trim(), author: editAuthor.trim() }
+          ? {
+              ...b,
+              title: editTitle.trim(),
+              author: editAuthor.trim(),
+              pages: editPages.trim() ? parseInt(editPages) || 0 : 0,
+            }
           : b
       )
     );
     setEditingBook(null);
     setEditTitle("");
     setEditAuthor("");
+    setEditPages("");
   };
   const cancelEdit = () => {
     setEditingBook(null);
     setEditTitle("");
     setEditAuthor("");
+    setEditPages("");
   };
   return (
     <div
@@ -371,7 +383,21 @@ export default function App() {
                 }
               }}
               placeholder="著者名"
-              className="w-40 rounded-xl px-3 py-2 outline-none"
+              className="w-32 rounded-xl px-3 py-2 outline-none"
+              style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
+            />
+            <input
+              value={pages}
+              onChange={(e) => setPages(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  addBook();
+                }
+              }}
+              placeholder="ページ数"
+              type="number"
+              min="0"
+              className="w-24 rounded-xl px-3 py-2 outline-none"
               style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
             />
             <button
@@ -480,6 +506,11 @@ export default function App() {
                 <div className="text-sm" style={{ color: "#6b7280" }}>
                   {b.author}
                 </div>
+                {b.pages > 0 && (
+                  <div className="text-xs mt-1" style={{ color: "#9ca3af" }}>
+                    {b.pages}ページ
+                  </div>
+                )}
                 <div className="text-xs mt-1" style={{ color: "#9ca3af" }}>
                   {b.finishedAt ? new Date(b.finishedAt).toLocaleString() : ""}
                 </div>
@@ -554,6 +585,23 @@ export default function App() {
                   className="w-full rounded-xl px-3 py-2 outline-none"
                   style={{ backgroundColor: "#f3f4f6", borderColor: "#e5e7eb" }}
                   placeholder="著者（任意）"
+                />
+              </div>
+              <div>
+                <label
+                  className="block text-sm mb-2"
+                  style={{ color: "#6b7280" }}
+                >
+                  ページ数
+                </label>
+                <input
+                  value={editPages}
+                  onChange={(e) => setEditPages(e.target.value)}
+                  type="number"
+                  min="0"
+                  className="w-full rounded-xl px-3 py-2 outline-none"
+                  style={{ backgroundColor: "#f3f4f6", borderColor: "#e5e7eb" }}
+                  placeholder="ページ数（任意）"
                 />
               </div>
               <div className="flex gap-2 pt-4">

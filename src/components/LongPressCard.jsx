@@ -63,6 +63,11 @@ export default function LongPressCard({
             <div className="text-sm" style={{ color: "#6b7280" }}>
               {book.author}
             </div>
+            {book.pages > 0 && (
+              <div className="text-xs mt-1" style={{ color: "#9ca3af" }}>
+                {book.pages}ページ
+              </div>
+            )}
           </div>
           <div
             className="text-xs px-2 py-1 rounded-full"
