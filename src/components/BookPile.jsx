@@ -384,7 +384,7 @@ export default function BookPile({ count, pages: pagesProp }) {
           width: `${STAGE_W}px`,
           height: 36,
           pointerEvents: "none",
-          zIndex: 80,
+          zIndex: 5,
           fontSize: 11,
           color: "#374151",
           display: "none", // ← 非表示化
@@ -551,7 +551,7 @@ export default function BookPile({ count, pages: pagesProp }) {
       {/* 表面（前部レイヤー）: 物理ボディに対応する DOM をここで配置 */}
       <div
         className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full flex items-end justify-center"
-        style={{ zIndex: 20 }}
+        style={{ zIndex: 5 }}
       >
         <div
           className="relative"
@@ -593,7 +593,7 @@ export default function BookPile({ count, pages: pagesProp }) {
                     (body && body.render && body.render.borderColor) ||
                     "rgba(0,0,0,0.06)"
                   }`, // 枠線を太くしてパレット色を適用
-                  zIndex: 25,
+                  zIndex: 6,
                 }}
               >
                 <div
@@ -610,7 +610,7 @@ export default function BookPile({ count, pages: pagesProp }) {
       {safeCount === 0 && (
         <div
           className="absolute inset-0 flex items-center justify-center text-sm gap-2"
-          style={{ color: "#6b7280", zIndex: 30 }}
+          style={{ color: "#6b7280", zIndex: 5 }}
         >
           <span className="text-2xl">📚</span>スッキリ！未読なし
         </div>
@@ -618,7 +618,7 @@ export default function BookPile({ count, pages: pagesProp }) {
 
       <div
         className="absolute top-2 left-4 text-xs flex items-center gap-2"
-        style={{ color: "#6b7280", zIndex: 30 }}
+        style={{ color: "#6b7280", zIndex: 5 }}
       >
         <span className="text-lg">📚</span>未読 {safeCount} 冊
       </div>
@@ -632,7 +632,7 @@ export default function BookPile({ count, pages: pagesProp }) {
           right: 0,
           bottom: 0,
           pointerEvents: "none",
-          zIndex: 60,
+          zIndex: 5,
           display: "none",
         }}
       >
