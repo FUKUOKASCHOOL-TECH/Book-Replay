@@ -510,7 +510,7 @@ function BookApp() {
                   <span className="ml-2 text-xs">({unread.length}件)</span>
                 )}
               </h2>
-              <div>
+              <div style={{ position: "relative", zIndex: 1 }}>
                 {unread.map((b, i) => (
                   <LongPressCard
                     key={b.id}
