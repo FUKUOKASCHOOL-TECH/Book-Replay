@@ -8,7 +8,7 @@ import { Engine, World, Bodies, Runner, Body, Composite, Events } from "matter-j
  * - 出現レンジ（中心 ±50px）をハイライト
  */
 
-export default function BookPile({ count }) {
+export default function BookPile({ count, pages: pagesProp }) {
   const containerRef = useRef(null);
   const engineRef = useRef(null);
   const runnerRef = useRef(null);
@@ -43,6 +43,28 @@ export default function BookPile({ count }) {
 
   const randRange = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // カラーパレット（白、灰、青、赤、黄） -> 枠線に使う
+  const COLORS = ["#ffffff", "#000000ff", "#60a5fa", "#f87171", "#facc15"];
+  const pickColor = () => COLORS[Math.floor(Math.random() * COLORS.length)];
+
+  // 正規化: 8桁 hex や 4桁 shorthand が来ても 6桁不透明 hex にする
+  const normalizeHex = (hex) => {
+     if (typeof hex !== "string") return hex;
+     const h = hex.trim();
+     // 8桁 (#RRGGBBAA) -> drop AA
+     if (/^#([0-9a-fA-F]{8})$/.test(h)) return "#" + h.slice(1, 7);
+     // 4桁 (#RGBA) -> expand to #RRGGBB (drop A)
+     if (/^#([0-9a-fA-F]{4})$/.test(h)) {
+       const r = h[1], g = h[2], b = h[3];
+       return `#${r}${r}${g}${g}${b}${b}`;
+     }
+     return h;
+   };
+ 
+  // 本の中身（表面塗り）パレット（#fff1cc, #d9cdab）からランダム
+  const INNER_COLORS = ["#ffe9abff","#d9cdab"];
+  const pickInnerColor = () => normalizeHex(INNER_COLORS[Math.floor(Math.random() * INNER_COLORS.length)]);
 
   const computeSafeCount = (cnt) => {
     if (Array.isArray(cnt)) return cnt.length;
@@ -98,6 +120,8 @@ export default function BookPile({ count }) {
           allowSurfaceSpawnRef.current = false;
 
           // 2) この本を物理世界から削除し、裏面の塔に移す
+          const borderColor = normalizeHex((body.render && body.render.borderColor) || pickColor());
+          const innerColor = normalizeHex((body.render && body.render.innerColor) || pickInnerColor());
           try {
             Composite.remove(engine.world, body);
           } catch (e) {}
@@ -112,7 +136,7 @@ export default function BookPile({ count }) {
 
           // 幅情報があれば、それを塔に渡す（なければランダム）
           const w = (body.render && body.render.w) || Math.floor(randRange(80, 160));
-          moveToTower(w);
+          moveToTower(w, borderColor, innerColor);
         }
       }
     };
@@ -153,7 +177,7 @@ export default function BookPile({ count }) {
   }, []);
 
   // タワーへ移動（裏面）
-  const moveToTower = (w) => {
+  const moveToTower = (w, borderColor, innerColor) => {
     const bg = bgRef.current;
     const available = [0, 1, 2].filter((i) => bg.counts[i] < bg.caps[i]);
     if (available.length === 0) {
@@ -167,7 +191,10 @@ export default function BookPile({ count }) {
     // 各冊に少しずつ揺らぎを追加して自然な積み方に（回転は与えない）
     const offset = Math.round(randRange(-12, 12)); // px
     const angle = 0; // 回転不要のため 0 に固定
-    bg.books[idx].push({ w: clamp(Math.floor(w), 80, 160), offset, angle });
+    // 枠線色・中身色を受け取れるように変更（無ければランダム）
+    const bColor = typeof borderColor !== "undefined" ? normalizeHex(borderColor) : pickColor();
+    const iColor = typeof innerColor !== "undefined" ? normalizeHex(innerColor) : pickInnerColor();
+    bg.books[idx].push({ w: clamp(Math.floor(w), 80, 160), offset, angle, borderColor: bColor, innerColor: iColor });
     setTick((t) => t + 1);
     if (bg.counts.every((c, i) => c >= bg.caps[i])) {
       allFullRef.current = true;
@@ -205,7 +232,8 @@ export default function BookPile({ count }) {
       Body.setInertia(body, body.mass * 10000);
     } catch (e) {}
     body.sleepThreshold = 60;
-    body.render = { w, h: 12 };
+    // 枠線色と中身色を持たせる（枠線は既存パレット、中身は指定の3色から）
+    body.render = { w, h: 12, borderColor: pickColor(), innerColor: pickInnerColor() };
 
     bodiesRef.current.push(body);
     World.add(world, body);
@@ -380,9 +408,9 @@ export default function BookPile({ count }) {
                           // translateX(-50%) に加え offset を与えて自然なズレを表現（回転は無し）
                           transform: `translateX(calc(-50% + ${offset}px)) rotate(${angle}deg)`,
                           borderRadius: "4px",
-                          backgroundColor: "#d1d5db", // 表面と同じ色調
+                          backgroundColor: book.innerColor || "#d1d5db", // 中身色を反映
                           boxShadow: "0 16px 30px -12px rgba(0,0,0,0.18)",
-                          border: "1px solid rgba(0,0,0,0.06)",
+                          border: `2px solid ${book.borderColor || "rgba(0,0,0,0.06)"}`, // 太めの枠線（パレット色）
                           zIndex: 2,
                         }}
                       >
@@ -415,6 +443,13 @@ export default function BookPile({ count }) {
                 key={i}
                 ref={(el) => {
                   bookElsRef.current[i] = el;
+                  // DOM と body の色を同期（body があればその色を適用）
+                  if (el) {
+                    const bColor = body && body.render && body.render.borderColor;
+                    const iColor = body && body.render && body.render.innerColor;
+                    if (iColor) el.style.backgroundColor = iColor;
+                    if (bColor) el.style.border = `2px solid ${bColor}`;
+                  }
                 }}
                 className="absolute origin-center rounded-md shadow-xl"
                 style={{
@@ -423,9 +458,9 @@ export default function BookPile({ count }) {
                   left: "50%",
                   top: "-100px",
                   transform: `translate(-50%, -50%)`,
-                  backgroundColor: "#d1d5db",
+                  backgroundColor: (body && body.render && body.render.innerColor) || "#d1d5db",
                   boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
-                  border: "1px solid rgba(0,0,0,0.06)", // ← 追加（前面の枠線）
+                  border: `2px solid ${(body && body.render && body.render.borderColor) || "rgba(0,0,0,0.06)"}`, // 枠線を太くしてパレット色を適用
                   zIndex: 25,
                 }}
               >
