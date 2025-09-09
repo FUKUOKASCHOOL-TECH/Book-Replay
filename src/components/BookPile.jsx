@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Engine, World, Bodies, Runner, Body, Composite, Events } from "matter-js";
+import {
+  Engine,
+  World,
+  Bodies,
+  Runner,
+  Body,
+  Composite,
+  Events,
+} from "matter-js";
 
 /**
  * インジケーター追加:
@@ -50,21 +58,24 @@ export default function BookPile({ count, pages: pagesProp }) {
 
   // 正規化: 8桁 hex や 4桁 shorthand が来ても 6桁不透明 hex にする
   const normalizeHex = (hex) => {
-     if (typeof hex !== "string") return hex;
-     const h = hex.trim();
-     // 8桁 (#RRGGBBAA) -> drop AA
-     if (/^#([0-9a-fA-F]{8})$/.test(h)) return "#" + h.slice(1, 7);
-     // 4桁 (#RGBA) -> expand to #RRGGBB (drop A)
-     if (/^#([0-9a-fA-F]{4})$/.test(h)) {
-       const r = h[1], g = h[2], b = h[3];
-       return `#${r}${r}${g}${g}${b}${b}`;
-     }
-     return h;
-   };
- 
+    if (typeof hex !== "string") return hex;
+    const h = hex.trim();
+    // 8桁 (#RRGGBBAA) -> drop AA
+    if (/^#([0-9a-fA-F]{8})$/.test(h)) return "#" + h.slice(1, 7);
+    // 4桁 (#RGBA) -> expand to #RRGGBB (drop A)
+    if (/^#([0-9a-fA-F]{4})$/.test(h)) {
+      const r = h[1],
+        g = h[2],
+        b = h[3];
+      return `#${r}${r}${g}${g}${b}${b}`;
+    }
+    return h;
+  };
+
   // 本の中身（表面塗り）パレット（#fff1cc, #d9cdab）からランダム
-  const INNER_COLORS = ["#ffe9abff","#d9cdab"];
-  const pickInnerColor = () => normalizeHex(INNER_COLORS[Math.floor(Math.random() * INNER_COLORS.length)]);
+  const INNER_COLORS = ["#ffe9abff", "#d9cdab"];
+  const pickInnerColor = () =>
+    normalizeHex(INNER_COLORS[Math.floor(Math.random() * INNER_COLORS.length)]);
 
   const computeSafeCount = (cnt) => {
     if (Array.isArray(cnt)) return cnt.length;
@@ -110,7 +121,8 @@ export default function BookPile({ count, pages: pagesProp }) {
 
     // afterUpdate で境界チェック（表面の本が左右境界を越えたら裏面へ移行）
     const afterUpdate = () => {
-      const { left: leftBoundaryNow, right: rightBoundaryNow } = boundaryRef.current;
+      const { left: leftBoundaryNow, right: rightBoundaryNow } =
+        boundaryRef.current;
       for (let i = bodiesRef.current.length - 1; i >= 0; i--) {
         const body = bodiesRef.current[i];
         if (!body || !body.position) continue;
@@ -120,8 +132,12 @@ export default function BookPile({ count, pages: pagesProp }) {
           allowSurfaceSpawnRef.current = false;
 
           // 2) この本を物理世界から削除し、裏面の塔に移す
-          const borderColor = normalizeHex((body.render && body.render.borderColor) || pickColor());
-          const innerColor = normalizeHex((body.render && body.render.innerColor) || pickInnerColor());
+          const borderColor = normalizeHex(
+            (body.render && body.render.borderColor) || pickColor()
+          );
+          const innerColor = normalizeHex(
+            (body.render && body.render.innerColor) || pickInnerColor()
+          );
           try {
             Composite.remove(engine.world, body);
           } catch (e) {}
@@ -135,7 +151,8 @@ export default function BookPile({ count, pages: pagesProp }) {
           }
 
           // 幅情報があれば、それを塔に渡す（なければランダム）
-          const w = (body.render && body.render.w) || Math.floor(randRange(80, 160));
+          const w =
+            (body.render && body.render.w) || Math.floor(randRange(80, 160));
           moveToTower(w, borderColor, innerColor);
         }
       }
@@ -192,9 +209,21 @@ export default function BookPile({ count, pages: pagesProp }) {
     const offset = Math.round(randRange(-12, 12)); // px
     const angle = 0; // 回転不要のため 0 に固定
     // 枠線色・中身色を受け取れるように変更（無ければランダム）
-    const bColor = typeof borderColor !== "undefined" ? normalizeHex(borderColor) : pickColor();
-    const iColor = typeof innerColor !== "undefined" ? normalizeHex(innerColor) : pickInnerColor();
-    bg.books[idx].push({ w: clamp(Math.floor(w), 80, 160), offset, angle, borderColor: bColor, innerColor: iColor });
+    const bColor =
+      typeof borderColor !== "undefined"
+        ? normalizeHex(borderColor)
+        : pickColor();
+    const iColor =
+      typeof innerColor !== "undefined"
+        ? normalizeHex(innerColor)
+        : pickInnerColor();
+    bg.books[idx].push({
+      w: clamp(Math.floor(w), 80, 160),
+      offset,
+      angle,
+      borderColor: bColor,
+      innerColor: iColor,
+    });
     setTick((t) => t + 1);
     if (bg.counts.every((c, i) => c >= bg.caps[i])) {
       allFullRef.current = true;
@@ -233,7 +262,12 @@ export default function BookPile({ count, pages: pagesProp }) {
     } catch (e) {}
     body.sleepThreshold = 60;
     // 枠線色と中身色を持たせる（枠線は既存パレット、中身は指定の3色から）
-    body.render = { w, h: 12, borderColor: pickColor(), innerColor: pickInnerColor() };
+    body.render = {
+      w,
+      h: 12,
+      borderColor: pickColor(),
+      innerColor: pickInnerColor(),
+    };
 
     bodiesRef.current.push(body);
     World.add(world, body);
@@ -253,61 +287,69 @@ export default function BookPile({ count, pages: pagesProp }) {
     const engine = engineRef.current;
     if (!engine) return;
 
-    // 現在合計と目標差分
-    let currentTotal = totalCurrent();
-    if (safeCount > currentTotal) {
-      let toAdd = safeCount - currentTotal;
-      // 1 tick での追加上限（大量追加で固まるのを防ぐ）
-      const MAX_ADD_PER_RUN = 6;
-      toAdd = Math.min(toAdd, MAX_ADD_PER_RUN);
+    // 少し遅延させてアニメーションを安定化
+    // 初期表示時は遅延を短くする
+    const delay = totalCurrent() === 0 ? 10 : 50;
+    const timer = setTimeout(() => {
+      // 現在合計と目標差分
+      let currentTotal = totalCurrent();
+      if (safeCount > currentTotal) {
+        let toAdd = safeCount - currentTotal;
+        // 1 tick での追加上限（大量追加で固まるのを防ぐ）
+        // 初期表示時は制限を緩和
+        const MAX_ADD_PER_RUN = currentTotal === 0 ? 20 : 6;
+        toAdd = Math.min(toAdd, MAX_ADD_PER_RUN);
 
-      for (let i = 0; i < toAdd; i++) {
-        if (allFullRef.current) break;
-        if (allowSurfaceSpawnRef.current) {
-          // 表面に出す
-          const w = Math.floor(randRange(80, 160));
-          spawnSurfaceBook(w);
-        } else {
-          // 裏面に積む（直接）
-          const w = Math.floor(randRange(80, 160));
-          const ok = moveToTower(w);
-          if (!ok) break;
+        for (let i = 0; i < toAdd; i++) {
+          if (allFullRef.current) break;
+          if (allowSurfaceSpawnRef.current) {
+            // 表面に出す
+            const w = Math.floor(randRange(80, 160));
+            spawnSurfaceBook(w);
+          } else {
+            // 裏面に積む（直接）
+            const w = Math.floor(randRange(80, 160));
+            const ok = moveToTower(w);
+            if (!ok) break;
+          }
         }
-      }
-      setTick((t) => t + 1);
-    } else if (safeCount < totalCurrent()) {
-      // 減らす: まず表面(body) を削除、それでも足りなければ裏面から減らす（LIFO）
-      let needRemove = totalCurrent() - safeCount;
-      while (needRemove > 0 && bodiesRef.current.length > 0) {
-        const b = bodiesRef.current.pop();
-        if (b) {
-          try {
-            Composite.remove(engine.world, b);
-          } catch (e) {}
-        }
-        // hide DOM if exists
-        if (bookElsRef.current.length > 0) {
-          const el = bookElsRef.current.pop();
-          if (el) el.style.display = "none";
-        }
-        needRemove--;
-      }
-      // 裏面から減らす（後ろに積んだものから削る）
-      const bg = bgRef.current;
-      while (needRemove > 0 && bg.counts.some((c) => c > 0)) {
-        // find a tower with >0, prefer the last filled (simple strategy)
-        let idx = [0, 1, 2].reverse().find((i) => bg.counts[i] > 0);
-        if (typeof idx === "undefined") break;
-        bg.counts[idx] -= 1;
-        bg.books[idx].pop();
-        needRemove--;
         setTick((t) => t + 1);
+      } else if (safeCount < totalCurrent()) {
+        // 減らす: まず表面(body) を削除、それでも足りなければ裏面から減らす（LIFO）
+        let needRemove = totalCurrent() - safeCount;
+        while (needRemove > 0 && bodiesRef.current.length > 0) {
+          const b = bodiesRef.current.pop();
+          if (b) {
+            try {
+              Composite.remove(engine.world, b);
+            } catch (e) {}
+          }
+          // hide DOM if exists
+          if (bookElsRef.current.length > 0) {
+            const el = bookElsRef.current.pop();
+            if (el) el.style.display = "none";
+          }
+          needRemove--;
+        }
+        // 裏面から減らす（後ろに積んだものから削る）
+        const bg = bgRef.current;
+        while (needRemove > 0 && bg.counts.some((c) => c > 0)) {
+          // find a tower with >0, prefer the last filled (simple strategy)
+          let idx = [0, 1, 2].reverse().find((i) => bg.counts[i] > 0);
+          if (typeof idx === "undefined") break;
+          bg.counts[idx] -= 1;
+          bg.books[idx].pop();
+          needRemove--;
+          setTick((t) => t + 1);
+        }
+        // If we removed some, ensure allowSurfaceSpawn may be re-enabled only if not allFull
+        if (!bg.counts.every((c, i) => c >= bg.caps[i])) {
+          allFullRef.current = false;
+        }
       }
-      // If we removed some, ensure allowSurfaceSpawn may be re-enabled only if not allFull
-      if (!bg.counts.every((c, i) => c >= bg.caps[i])) {
-        allFullRef.current = false;
-      }
-    }
+    }, delay); // 動的遅延
+
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeCount]);
 
@@ -349,7 +391,16 @@ export default function BookPile({ count, pages: pagesProp }) {
         }}
       >
         {/* 軸線 */}
-        <div style={{ position: "absolute", left: 0, right: 0, top: "50%", height: 1, background: "rgba(55,65,81,0.12)" }} />
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "50%",
+            height: 1,
+            background: "rgba(55,65,81,0.12)",
+          }}
+        />
 
         {/* 出現範囲ハイライト (中心 ±50px) */}
         <div
@@ -367,15 +418,48 @@ export default function BookPile({ count, pages: pagesProp }) {
         />
 
         {/* 中心 0 ラベル */}
-        <div style={{ position: "absolute", left: "50%", top: -12, transform: "translateX(-50%)", fontSize: 12, fontWeight: 600 }}>
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: -12,
+            transform: "translateX(-50%)",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
           0
         </div>
 
         {/* 目盛りとラベル */}
         {ticks.map((t) => (
-          <div key={t} style={{ position: "absolute", left: `calc(50% + ${t}px)`, top: "50%", transform: "translate(-50%, -50%)" }}>
-            <div style={{ width: 2, height: 10, background: "rgba(55,65,81,0.18)", margin: "0 auto" }} />
-            <div style={{ marginTop: 2, textAlign: "center", fontSize: 10, color: "rgba(55,65,81,0.6)" }}>{t}</div>
+          <div
+            key={t}
+            style={{
+              position: "absolute",
+              left: `calc(50% + ${t}px)`,
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <div
+              style={{
+                width: 2,
+                height: 10,
+                background: "rgba(55,65,81,0.18)",
+                margin: "0 auto",
+              }}
+            />
+            <div
+              style={{
+                marginTop: 2,
+                textAlign: "center",
+                fontSize: 10,
+                color: "rgba(55,65,81,0.6)",
+              }}
+            >
+              {t}
+            </div>
           </div>
         ))}
       </div>
@@ -383,18 +467,33 @@ export default function BookPile({ count, pages: pagesProp }) {
       {/* 裏面（後部レイヤー） */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full flex items-end justify-center">
-          <div className="relative" style={{ width: STAGE_W + "px", maxWidth: "95%", height: "220px" }}>
+          <div
+            className="relative"
+            style={{ width: STAGE_W + "px", maxWidth: "95%", height: "220px" }}
+          >
             {[0, 1, 2].map((ti) => {
               const leftCalc = `calc(50% + ${towerOffsets[ti]}px)`;
               const cap = bg.caps[ti];
               const cnt = bg.counts[ti];
               return (
-                <div key={ti} style={{ position: "absolute", left: leftCalc, bottom: 0, transform: "translateX(-50%)" }}>
+                <div
+                  key={ti}
+                  style={{
+                    position: "absolute",
+                    left: leftCalc,
+                    bottom: 0,
+                    transform: "translateX(-50%)",
+                  }}
+                >
                   {Array.from({ length: cnt }).map((_, j) => {
                     const book = bg.books[ti][j] || {};
                     const w = book.w || 100;
-                    const offset = typeof book.offset === "number" ? book.offset : Math.round(randRange(-8, 8));
-                    const angle = typeof book.angle === "number" ? book.angle : 0; // 回転は基本 0
+                    const offset =
+                      typeof book.offset === "number"
+                        ? book.offset
+                        : Math.round(randRange(-8, 8));
+                    const angle =
+                      typeof book.angle === "number" ? book.angle : 0; // 回転は基本 0
                     return (
                       <div
                         key={j}
@@ -410,15 +509,30 @@ export default function BookPile({ count, pages: pagesProp }) {
                           borderRadius: "4px",
                           backgroundColor: book.innerColor || "#d1d5db", // 中身色を反映
                           boxShadow: "0 16px 30px -12px rgba(0,0,0,0.18)",
-                          border: `2px solid ${book.borderColor || "rgba(0,0,0,0.06)"}`, // 太めの枠線（パレット色）
+                          border: `2px solid ${
+                            book.borderColor || "rgba(0,0,0,0.06)"
+                          }`, // 太めの枠線（パレット色）
                           zIndex: 2,
                         }}
                       >
-                        <div className="h-full w-2" style={{ backgroundColor: "rgba(156,163,175,0.7)" }} />
+                        <div
+                          className="h-full w-2"
+                          style={{ backgroundColor: "rgba(156,163,175,0.7)" }}
+                        />
                       </div>
                     );
                   })}
-                  <div style={{ position: "absolute", bottom: `${cnt * 12 + 6}px`, left: "50%", transform: "translateX(-50%)", fontSize: 10, color: "#6b7280", display: "none" }}>
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: `${cnt * 12 + 6}px`,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      fontSize: 10,
+                      color: "#6b7280",
+                      display: "none",
+                    }}
+                  >
                     {cnt}/{cap} {/* ← カウント表示を非表示化 */}
                   </div>
                 </div>
@@ -429,15 +543,26 @@ export default function BookPile({ count, pages: pagesProp }) {
       </div>
 
       {/* 地面のハイライト */}
-      <div className="absolute bottom-2 left-0 right-0 h-3" style={{ backgroundColor: "rgba(209,213,219,0.4)", zIndex: 5 }} />
+      <div
+        className="absolute bottom-2 left-0 right-0 h-3"
+        style={{ backgroundColor: "rgba(209,213,219,0.4)", zIndex: 5 }}
+      />
 
       {/* 表面（前部レイヤー）: 物理ボディに対応する DOM をここで配置 */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full flex items-end justify-center" style={{ zIndex: 20 }}>
-        <div className="relative" style={{ width: STAGE_W + "px", maxWidth: "95%", height: "220px" }}>
+      <div
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full flex items-end justify-center"
+        style={{ zIndex: 20 }}
+      >
+        <div
+          className="relative"
+          style={{ width: STAGE_W + "px", maxWidth: "95%", height: "220px" }}
+        >
           {Array.from({ length: displaySurfaceCount }).map((_, i) => {
             // 既にボディがある場合は body.render.w を参照して幅決定
             const body = bodiesRef.current[i];
-            const baseW = (body && body.render && body.render.w) || Math.max(80, Math.min(160, 80 + (i % 5) * 12));
+            const baseW =
+              (body && body.render && body.render.w) ||
+              Math.max(80, Math.min(160, 80 + (i % 5) * 12));
             return (
               <div
                 key={i}
@@ -445,8 +570,10 @@ export default function BookPile({ count, pages: pagesProp }) {
                   bookElsRef.current[i] = el;
                   // DOM と body の色を同期（body があればその色を適用）
                   if (el) {
-                    const bColor = body && body.render && body.render.borderColor;
-                    const iColor = body && body.render && body.render.innerColor;
+                    const bColor =
+                      body && body.render && body.render.borderColor;
+                    const iColor =
+                      body && body.render && body.render.innerColor;
                     if (iColor) el.style.backgroundColor = iColor;
                     if (bColor) el.style.border = `2px solid ${bColor}`;
                   }
@@ -458,13 +585,21 @@ export default function BookPile({ count, pages: pagesProp }) {
                   left: "50%",
                   top: "-100px",
                   transform: `translate(-50%, -50%)`,
-                  backgroundColor: (body && body.render && body.render.innerColor) || "#d1d5db",
+                  backgroundColor:
+                    (body && body.render && body.render.innerColor) ||
+                    "#d1d5db",
                   boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
-                  border: `2px solid ${(body && body.render && body.render.borderColor) || "rgba(0,0,0,0.06)"}`, // 枠線を太くしてパレット色を適用
+                  border: `2px solid ${
+                    (body && body.render && body.render.borderColor) ||
+                    "rgba(0,0,0,0.06)"
+                  }`, // 枠線を太くしてパレット色を適用
                   zIndex: 25,
                 }}
               >
-                <div className="h-full w-2" style={{ backgroundColor: "rgba(156,163,175,0.7)" }} />
+                <div
+                  className="h-full w-2"
+                  style={{ backgroundColor: "rgba(156,163,175,0.7)" }}
+                />
               </div>
             );
           })}
@@ -473,19 +608,56 @@ export default function BookPile({ count, pages: pagesProp }) {
 
       {/* 未読カウント / ステータス */}
       {safeCount === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm gap-2" style={{ color: "#6b7280", zIndex: 30 }}>
+        <div
+          className="absolute inset-0 flex items-center justify-center text-sm gap-2"
+          style={{ color: "#6b7280", zIndex: 30 }}
+        >
           <span className="text-2xl">📚</span>スッキリ！未読なし
         </div>
       )}
 
-      <div className="absolute top-2 left-4 text-xs flex items-center gap-2" style={{ color: "#6b7280", zIndex: 30 }}>
+      <div
+        className="absolute top-2 left-4 text-xs flex items-center gap-2"
+        style={{ color: "#6b7280", zIndex: 30 }}
+      >
         <span className="text-lg">📚</span>未読 {safeCount} 冊
       </div>
 
       {/* 境界線（赤線） */}
-      <div style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 60, display: "none" }}>
-        <div style={{ position: "absolute", left: `${lines.left}px`, top: 0, bottom: 0, width: "2px", background: "rgba(255,0,0,0.25)", transform: `translateX(-50%)` }} />
-        <div style={{ position: "absolute", left: `${lines.right}px`, top: 0, bottom: 0, width: "2px", background: "rgba(255,0,0,0.25)", transform: `translateX(-50%)` }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: "none",
+          zIndex: 60,
+          display: "none",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: `${lines.left}px`,
+            top: 0,
+            bottom: 0,
+            width: "2px",
+            background: "rgba(255,0,0,0.25)",
+            transform: `translateX(-50%)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: `${lines.right}px`,
+            top: 0,
+            bottom: 0,
+            width: "2px",
+            background: "rgba(255,0,0,0.25)",
+            transform: `translateX(-50%)`,
+          }}
+        />
       </div>
     </div>
   );

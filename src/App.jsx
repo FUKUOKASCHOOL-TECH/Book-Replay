@@ -44,6 +44,17 @@ function BookApp() {
 
     return () => unsubscribe();
   }, [user]);
+
+  // データ読み込み完了後にアニメーションを安定化
+  useEffect(() => {
+    if (!loading && books.length > 0) {
+      // 少し遅延させてアニメーションを安定化
+      const timer = setTimeout(() => {
+        setTick((prev) => prev + 1);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, books.length]);
   const filterBooks = (books) => {
     let filtered = books;
 
@@ -416,7 +427,10 @@ function BookApp() {
           </div>
         ) : (
           <>
-            <BookPile count={unread.length} />
+            <BookPile
+              count={unread.length}
+              pages={unread.reduce((sum, book) => sum + (book.pages || 0), 0)}
+            />
             <section
               className="rounded-2xl border p-4"
               style={{
