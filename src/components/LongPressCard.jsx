@@ -16,7 +16,7 @@ export default function LongPressCard({
   };
   return (
     <div
-      style={{ marginTop: index === 0 ? 0 : -24, zIndex: 100 - index }}
+      style={{ marginTop: index === 0 ? 0 : -24, zIndex: 5 - index }}
       className="relative transition-all"
     >
       <div

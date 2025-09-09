@@ -35,7 +35,7 @@ export default function BookPile({ count, pages: pagesProp }) {
 
   // 裏面（3つの塔）
   const bgRef = useRef({
-    caps: [16, 16, 16],
+    caps: [50, 50, 50], // 各塔の容量を50冊に増加（合計150冊）
     counts: [0, 0, 0],
     // each entry: { w, offset, angle }
     books: [[], [], []],
@@ -287,76 +287,113 @@ export default function BookPile({ count, pages: pagesProp }) {
     const engine = engineRef.current;
     if (!engine) return;
 
-    // 少し遅延させてアニメーションを安定化
-    // 初期表示時は遅延を短くする
-    const delay = totalCurrent() === 0 ? 10 : 50;
-    const timer = setTimeout(() => {
-      // 現在合計と目標差分
-      let currentTotal = totalCurrent();
-      if (safeCount > currentTotal) {
-        let toAdd = safeCount - currentTotal;
-        // 1 tick での追加上限（大量追加で固まるのを防ぐ）
-        // 初期表示時は制限を緩和
-        const MAX_ADD_PER_RUN = currentTotal === 0 ? 20 : 6;
-        toAdd = Math.min(toAdd, MAX_ADD_PER_RUN);
+    // 初期表示時も段階的に表示（アニメーション効果）
+    const currentTotal = totalCurrent();
+    if (currentTotal === 0) {
+      // 初期表示時は段階的に本を表示
+      if (safeCount > 0) {
+        const addBooksGradually = () => {
+          let added = 0;
+          const maxPerBatch = 2; // 一度に2冊ずつ追加
+          const interval = 300; // 300ms間隔（ゆっくり）
 
-        for (let i = 0; i < toAdd; i++) {
-          if (allFullRef.current) break;
-          if (allowSurfaceSpawnRef.current) {
-            // 表面に出す
-            const w = Math.floor(randRange(80, 160));
-            spawnSurfaceBook(w);
-          } else {
-            // 裏面に積む（直接）
-            const w = Math.floor(randRange(80, 160));
-            const ok = moveToTower(w);
-            if (!ok) break;
-          }
-        }
-        setTick((t) => t + 1);
-      } else if (safeCount < totalCurrent()) {
-        // 減らす: まず表面(body) を削除、それでも足りなければ裏面から減らす（LIFO）
-        let needRemove = totalCurrent() - safeCount;
-        while (needRemove > 0 && bodiesRef.current.length > 0) {
-          const b = bodiesRef.current.pop();
-          if (b) {
-            try {
-              Composite.remove(engine.world, b);
-            } catch (e) {}
-          }
-          // hide DOM if exists
-          if (bookElsRef.current.length > 0) {
-            const el = bookElsRef.current.pop();
-            if (el) el.style.display = "none";
-          }
-          needRemove--;
-        }
-        // 裏面から減らす（後ろに積んだものから削る）
-        const bg = bgRef.current;
-        while (needRemove > 0 && bg.counts.some((c) => c > 0)) {
-          // find a tower with >0, prefer the last filled (simple strategy)
-          let idx = [0, 1, 2].reverse().find((i) => bg.counts[i] > 0);
-          if (typeof idx === "undefined") break;
-          bg.counts[idx] -= 1;
-          bg.books[idx].pop();
-          needRemove--;
-          setTick((t) => t + 1);
-        }
-        // If we removed some, ensure allowSurfaceSpawn may be re-enabled only if not allFull
-        if (!bg.counts.every((c, i) => c >= bg.caps[i])) {
-          allFullRef.current = false;
-        }
+          const addBatch = () => {
+            for (let i = 0; i < maxPerBatch && added < safeCount; i++) {
+              if (allFullRef.current) break;
+              if (allowSurfaceSpawnRef.current) {
+                // 表面に出す
+                const w = Math.floor(randRange(80, 160));
+                spawnSurfaceBook(w);
+              } else {
+                // 裏面に積む（直接）
+                const w = Math.floor(randRange(80, 160));
+                const ok = moveToTower(w);
+                if (!ok) break;
+              }
+              added++;
+            }
+            setTick((t) => t + 1);
+
+            if (added < safeCount) {
+              setTimeout(addBatch, interval);
+            }
+          };
+
+          // 少し遅延してから開始（アニメーション効果）
+          setTimeout(addBatch, 200);
+        };
+
+        addBooksGradually();
       }
-    }, delay); // 動的遅延
+    } else {
+      // それ以外は遅延して段階的に処理
+      const timer = setTimeout(() => {
+        // 現在合計と目標差分
+        let currentTotal = totalCurrent();
+        if (safeCount > currentTotal) {
+          let toAdd = safeCount - currentTotal;
+          // 1 tick での追加上限（大量追加で固まるのを防ぐ）
+          const MAX_ADD_PER_RUN = 6;
+          toAdd = Math.min(toAdd, MAX_ADD_PER_RUN);
 
-    return () => clearTimeout(timer);
+          for (let i = 0; i < toAdd; i++) {
+            if (allFullRef.current) break;
+            if (allowSurfaceSpawnRef.current) {
+              // 表面に出す
+              const w = Math.floor(randRange(80, 160));
+              spawnSurfaceBook(w);
+            } else {
+              // 裏面に積む（直接）
+              const w = Math.floor(randRange(80, 160));
+              const ok = moveToTower(w);
+              if (!ok) break;
+            }
+          }
+          setTick((t) => t + 1);
+        } else if (safeCount < totalCurrent()) {
+          // 減らす: まず表面(body) を削除、それでも足りなければ裏面から減らす（LIFO）
+          let needRemove = totalCurrent() - safeCount;
+          while (needRemove > 0 && bodiesRef.current.length > 0) {
+            const b = bodiesRef.current.pop();
+            if (b) {
+              try {
+                Composite.remove(engine.world, b);
+              } catch (e) {}
+            }
+            // hide DOM if exists
+            if (bookElsRef.current.length > 0) {
+              const el = bookElsRef.current.pop();
+              if (el) el.style.display = "none";
+            }
+            needRemove--;
+          }
+          // 裏面から減らす（後ろに積んだものから削る）
+          const bg = bgRef.current;
+          while (needRemove > 0 && bg.counts.some((c) => c > 0)) {
+            // find a tower with >0, prefer the last filled (simple strategy)
+            let idx = [0, 1, 2].reverse().find((i) => bg.counts[i] > 0);
+            if (typeof idx === "undefined") break;
+            bg.counts[idx] -= 1;
+            bg.books[idx].pop();
+            needRemove--;
+            setTick((t) => t + 1);
+          }
+          // If we removed some, ensure allowSurfaceSpawn may be re-enabled only if not allFull
+          if (!bg.counts.every((c, i) => c >= bg.caps[i])) {
+            allFullRef.current = false;
+          }
+        }
+      }, 50); // 50ms遅延
+
+      return () => clearTimeout(timer);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeCount]);
 
   // 表示用データ
   const bg = bgRef.current;
   const towerOffsets = [-180, 0, 180];
-  const displaySurfaceCount = Math.min(200, bodiesRef.current.length);
+  const displaySurfaceCount = Math.min(500, bodiesRef.current.length); // 表示上限を500冊に増加
 
   // インジケーター用目盛り配列（中心を0として左右に50px刻み）
   const half = Math.floor(STAGE_W / 2);
