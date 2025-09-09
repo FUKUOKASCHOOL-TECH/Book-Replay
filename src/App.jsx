@@ -1,7 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import BookPile from "./components/BookPile.jsx";
 import LongPressCard from "./components/LongPressCard.jsx";
-export default function App() {
+import AuthForm from "./components/AuthForm.jsx";
+import { useAuth } from "./contexts/AuthContext.jsx";
+import {
+  addBook,
+  updateBook,
+  deleteBook,
+  markBookAsRead,
+  subscribeToBooks,
+} from "./firestore.js";
+function BookApp() {
+  const { user, logout } = useAuth();
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [pages, setPages] = useState("");
@@ -15,6 +25,25 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState("all"); // 'all', 'unread', 'read'
   const [sortBy, setSortBy] = useState("addedAt"); // 'addedAt', 'title', 'author', 'finishedAt'
   const [sortOrder, setSortOrder] = useState("desc"); // 'asc', 'desc'
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Firestoreから本のデータをリアルタイムで取得
+  useEffect(() => {
+    if (!user) {
+      setBooks([]);
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = subscribeToBooks(user.uid, (booksData) => {
+      setBooks(booksData);
+      setLoading(false);
+      setError(null);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
   const filterBooks = (books) => {
     let filtered = books;
 
@@ -92,31 +121,48 @@ export default function App() {
   const authors = [
     ...new Set(books.map((b) => b.author).filter((a) => a.trim())),
   ].sort();
-  const addBook = () => {
-    if (!title.trim()) return;
-    const id = (books[0]?.id || 0) + 1;
-    const book = {
-      id,
-      title: title.trim(),
-      author: author.trim(),
-      pages: pages.trim() ? parseInt(pages) || 0 : 0,
-      read: false,
-      addedAt: Date.now(),
-    };
-    setBooks([book, ...books]);
-    setTitle("");
-    setAuthor("");
-    setPages("");
+  const handleAddBook = async () => {
+    if (!title.trim() || !user) return;
+
+    try {
+      setError(null);
+      const bookData = {
+        title: title.trim(),
+        author: author.trim(),
+        pages: pages.trim() ? parseInt(pages) || 0 : 0,
+      };
+
+      await addBook(user.uid, bookData);
+      setTitle("");
+      setAuthor("");
+      setPages("");
+    } catch (error) {
+      setError("本の追加に失敗しました");
+      console.error(error);
+    }
   };
-  const markRead = (book) => {
-    setBooks((bs) =>
-      bs.map((b) =>
-        b.id === book.id ? { ...b, read: true, finishedAt: Date.now() } : b
-      )
-    );
+  const handleMarkRead = async (book) => {
+    if (!user) return;
+
+    try {
+      setError(null);
+      await markBookAsRead(user.uid, book.id);
+    } catch (error) {
+      setError("読了マークに失敗しました");
+      console.error(error);
+    }
   };
-  const deleteBook = (bookId) => {
-    setBooks((bs) => bs.filter((b) => b.id !== bookId));
+
+  const handleDeleteBook = async (bookId) => {
+    if (!user) return;
+
+    try {
+      setError(null);
+      await deleteBook(user.uid, bookId);
+    } catch (error) {
+      setError("本の削除に失敗しました");
+      console.error(error);
+    }
   };
   const startEdit = (book) => {
     setEditingBook(book);
@@ -124,24 +170,26 @@ export default function App() {
     setEditAuthor(book.author);
     setEditPages(book.pages || "");
   };
-  const saveEdit = () => {
-    if (!editTitle.trim()) return;
-    setBooks((bs) =>
-      bs.map((b) =>
-        b.id === editingBook.id
-          ? {
-              ...b,
-              title: editTitle.trim(),
-              author: editAuthor.trim(),
-              pages: editPages.trim() ? parseInt(editPages) || 0 : 0,
-            }
-          : b
-      )
-    );
-    setEditingBook(null);
-    setEditTitle("");
-    setEditAuthor("");
-    setEditPages("");
+  const handleSaveEdit = async () => {
+    if (!editTitle.trim() || !user) return;
+
+    try {
+      setError(null);
+      const bookData = {
+        title: editTitle.trim(),
+        author: editAuthor.trim(),
+        pages: editPages.trim() ? parseInt(editPages) || 0 : 0,
+      };
+
+      await updateBook(user.uid, editingBook.id, bookData);
+      setEditingBook(null);
+      setEditTitle("");
+      setEditAuthor("");
+      setEditPages("");
+    } catch (error) {
+      setError("本の更新に失敗しました");
+      console.error(error);
+    }
   };
   const cancelEdit = () => {
     setEditingBook(null);
@@ -189,6 +237,16 @@ export default function App() {
                   className="w-full rounded-xl px-3 py-2 outline-none text-sm text-white"
                   style={{ backgroundColor: "rgba(255, 255, 255, 0.2)" }}
                 />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-white">{user?.email}</span>
+                <button
+                  onClick={logout}
+                  className="px-3 py-1 rounded-lg text-sm text-white hover:bg-red-600 transition-colors"
+                  style={{ backgroundColor: "rgba(239, 68, 68, 0.8)" }}
+                >
+                  ログアウト
+                </button>
               </div>
             </div>
             <div className="flex gap-4 flex-wrap">
@@ -344,206 +402,228 @@ export default function App() {
         </div>
       </header>
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        <BookPile count={unread.length} />
-        <section
-          className="rounded-2xl border p-4"
-          style={{
-            borderColor: "#d1d5db",
-            backgroundColor: "#fef3c7",
-            boxShadow:
-              "0 20px 40px -12px rgba(0, 0, 0, 0.15), 0 8px 16px -4px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
-          }}
-        >
-          <h2
-            className="text-sm uppercase tracking-wider mb-3 flex items-center gap-2"
-            style={{ color: "#374151" }}
-          >
-            <span className="text-lg">📚</span>
-            新しい本を追加
-          </h2>
-          <div className="flex gap-2">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  addBook();
-                }
+        {/* エラー表示 */}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
+        {/* ローディング表示 */}
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="text-white">データを読み込み中...</div>
+          </div>
+        ) : (
+          <>
+            <BookPile count={unread.length} />
+            <section
+              className="rounded-2xl border p-4"
+              style={{
+                borderColor: "#d1d5db",
+                backgroundColor: "#fef3c7",
+                boxShadow:
+                  "0 20px 40px -12px rgba(0, 0, 0, 0.15), 0 8px 16px -4px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
               }}
-              placeholder="本のタイトル"
-              className="flex-1 rounded-xl px-3 py-2 outline-none"
-              style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
-            />
-            <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  addBook();
-                }
-              }}
-              placeholder="著者名"
-              className="w-32 rounded-xl px-3 py-2 outline-none"
-              style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
-            />
-            <input
-              value={pages}
-              onChange={(e) => setPages(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  addBook();
-                }
-              }}
-              placeholder="ページ数"
-              type="number"
-              min="0"
-              className="w-24 rounded-xl px-3 py-2 outline-none"
-              style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
-            />
-            <button
-              onClick={addBook}
-              className="px-4 py-2 rounded-xl text-white font-semibold"
-              style={{ backgroundColor: "#f97316" }}
             >
-              追加
-            </button>
-          </div>
-          <p className="text-xs mt-2" style={{ color: "#6b7280" }}>
-            ヒント: 追加後、カードを長押し（約0.8秒）すると「読了」になります。
-          </p>
-        </section>
-        <section>
-          <h2
-            className="text-sm uppercase tracking-wider mb-2 flex items-center gap-2"
-            style={{ color: "#f3f4f6" }}
-          >
-            <span className="text-lg">📚</span>
-            未読(積読)
-            {searchQuery && (
-              <span className="ml-2 text-xs">({unread.length}件)</span>
-            )}
-          </h2>
-          <div>
-            {unread.map((b, i) => (
-              <LongPressCard
-                key={b.id}
-                index={i}
-                book={b}
-                onLong={() => markRead(b)}
-                onDelete={() => deleteBook(b.id)}
-                onEdit={() => startEdit(b)}
-              />
-            ))}
-            {unread.length === 0 && !searchQuery && (
-              <div
-                className="p-8 text-center rounded-2xl"
-                style={{
-                  color: "#6b7280",
-                  borderColor: "#d1d5db",
-                  backgroundColor: "#fef3c7",
-                  boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
-                }}
+              <h2
+                className="text-sm uppercase tracking-wider mb-3 flex items-center gap-2"
+                style={{ color: "#374151" }}
               >
-                未読はありません。上のフォームから追加してください。
+                <span className="text-lg">📚</span>
+                新しい本を追加
+              </h2>
+              <div className="flex gap-2">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddBook();
+                    }
+                  }}
+                  placeholder="本のタイトル"
+                  className="flex-1 rounded-xl px-3 py-2 outline-none"
+                  style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
+                />
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddBook();
+                    }
+                  }}
+                  placeholder="著者名"
+                  className="w-32 rounded-xl px-3 py-2 outline-none"
+                  style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
+                />
+                <input
+                  value={pages}
+                  onChange={(e) => setPages(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddBook();
+                    }
+                  }}
+                  placeholder="ページ数"
+                  type="number"
+                  min="0"
+                  className="w-24 rounded-xl px-3 py-2 outline-none"
+                  style={{ backgroundColor: "white", borderColor: "#e5e7eb" }}
+                />
+                <button
+                  onClick={handleAddBook}
+                  className="px-4 py-2 rounded-xl text-white font-semibold"
+                  style={{ backgroundColor: "#f97316" }}
+                >
+                  追加
+                </button>
               </div>
-            )}
-            {unread.length === 0 && searchQuery && (
-              <div
-                className="p-8 text-center rounded-2xl"
-                style={{
-                  color: "#6b7280",
-                  borderColor: "#d1d5db",
-                  backgroundColor: "#fef3c7",
-                  boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
-                }}
+              <p className="text-xs mt-2" style={{ color: "#6b7280" }}>
+                ヒント:
+                追加後、カードを長押し（約0.8秒）すると「読了」になります。
+              </p>
+            </section>
+            <section>
+              <h2
+                className="text-sm uppercase tracking-wider mb-2 flex items-center gap-2"
+                style={{ color: "#f3f4f6" }}
               >
-                検索条件に一致する未読の本はありません。
-              </div>
-            )}
-          </div>
-        </section>
-        <section>
-          <h2
-            className="text-sm uppercase tracking-wider mb-2 flex items-center gap-2"
-            style={{ color: "#f3f4f6" }}
-          >
-            <span className="text-lg">✅</span>
-            読了
-            {searchQuery && (
-              <span className="ml-2 text-xs">({read.length}件)</span>
-            )}
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {read.map((b) => (
-              <div
-                key={b.id}
-                className="rounded-2xl p-4 relative group"
-                style={{
-                  borderColor: "#d1d5db",
-                  backgroundColor: "#fef3c7",
-                  boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
-                }}
-              >
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <button
-                    onClick={() => startEdit(b)}
-                    className="w-6 h-6 rounded-full bg-blue-500/20 hover:bg-blue-500/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="編集"
+                <span className="text-lg">📚</span>
+                未読(積読)
+                {searchQuery && (
+                  <span className="ml-2 text-xs">({unread.length}件)</span>
+                )}
+              </h2>
+              <div>
+                {unread.map((b, i) => (
+                  <LongPressCard
+                    key={b.id}
+                    index={i}
+                    book={b}
+                    onLong={() => handleMarkRead(b)}
+                    onDelete={() => handleDeleteBook(b.id)}
+                    onEdit={() => startEdit(b)}
+                  />
+                ))}
+                {unread.length === 0 && !searchQuery && (
+                  <div
+                    className="p-8 text-center rounded-2xl"
+                    style={{
+                      color: "#6b7280",
+                      borderColor: "#d1d5db",
+                      backgroundColor: "#fef3c7",
+                      boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
+                    }}
                   >
-                    <span className="text-blue-400 text-xs">✏</span>
-                  </button>
-                  <button
-                    onClick={() => deleteBook(b.id)}
-                    className="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="削除"
-                  >
-                    <span className="text-red-400 text-xs">×</span>
-                  </button>
-                </div>
-                <div className="font-semibold" style={{ color: "#374151" }}>
-                  {b.title}
-                </div>
-                <div className="text-sm" style={{ color: "#6b7280" }}>
-                  {b.author}
-                </div>
-                {b.pages > 0 && (
-                  <div className="text-xs mt-1" style={{ color: "#9ca3af" }}>
-                    {b.pages}ページ
+                    未読はありません。上のフォームから追加してください。
                   </div>
                 )}
-                <div className="text-xs mt-1" style={{ color: "#9ca3af" }}>
-                  {b.finishedAt ? new Date(b.finishedAt).toLocaleString() : ""}
-                </div>
+                {unread.length === 0 && searchQuery && (
+                  <div
+                    className="p-8 text-center rounded-2xl"
+                    style={{
+                      color: "#6b7280",
+                      borderColor: "#d1d5db",
+                      backgroundColor: "#fef3c7",
+                      boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
+                    }}
+                  >
+                    検索条件に一致する未読の本はありません。
+                  </div>
+                )}
               </div>
-            ))}
-            {read.length === 0 && !searchQuery && (
-              <div
-                className="p-6 rounded-2xl"
-                style={{
-                  color: "#6b7280",
-                  borderColor: "#d1d5db",
-                  backgroundColor: "#fef3c7",
-                  boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
-                }}
+            </section>
+            <section>
+              <h2
+                className="text-sm uppercase tracking-wider mb-2 flex items-center gap-2"
+                style={{ color: "#f3f4f6" }}
               >
-                まだ読了はありません。
+                <span className="text-lg">✅</span>
+                読了
+                {searchQuery && (
+                  <span className="ml-2 text-xs">({read.length}件)</span>
+                )}
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {read.map((b) => (
+                  <div
+                    key={b.id}
+                    className="rounded-2xl p-4 relative group"
+                    style={{
+                      borderColor: "#d1d5db",
+                      backgroundColor: "#fef3c7",
+                      boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
+                    }}
+                  >
+                    <div className="absolute top-2 right-2 flex gap-1">
+                      <button
+                        onClick={() => startEdit(b)}
+                        className="w-6 h-6 rounded-full bg-blue-500/20 hover:bg-blue-500/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="編集"
+                      >
+                        <span className="text-blue-400 text-xs">✏</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBook(b.id)}
+                        className="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="削除"
+                      >
+                        <span className="text-red-400 text-xs">×</span>
+                      </button>
+                    </div>
+                    <div className="font-semibold" style={{ color: "#374151" }}>
+                      {b.title}
+                    </div>
+                    <div className="text-sm" style={{ color: "#6b7280" }}>
+                      {b.author}
+                    </div>
+                    {b.pages > 0 && (
+                      <div
+                        className="text-xs mt-1"
+                        style={{ color: "#9ca3af" }}
+                      >
+                        {b.pages}ページ
+                      </div>
+                    )}
+                    <div className="text-xs mt-1" style={{ color: "#9ca3af" }}>
+                      {b.finishedAt
+                        ? new Date(b.finishedAt).toLocaleString()
+                        : ""}
+                    </div>
+                  </div>
+                ))}
+                {read.length === 0 && !searchQuery && (
+                  <div
+                    className="p-6 rounded-2xl"
+                    style={{
+                      color: "#6b7280",
+                      borderColor: "#d1d5db",
+                      backgroundColor: "#fef3c7",
+                      boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
+                    }}
+                  >
+                    まだ読了はありません。
+                  </div>
+                )}
+                {read.length === 0 && searchQuery && (
+                  <div
+                    className="p-6 rounded-2xl"
+                    style={{
+                      color: "#6b7280",
+                      borderColor: "#d1d5db",
+                      backgroundColor: "#fef3c7",
+                      boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
+                    }}
+                  >
+                    検索条件に一致する読了の本はありません。
+                  </div>
+                )}
               </div>
-            )}
-            {read.length === 0 && searchQuery && (
-              <div
-                className="p-6 rounded-2xl"
-                style={{
-                  color: "#6b7280",
-                  borderColor: "#d1d5db",
-                  backgroundColor: "#fef3c7",
-                  boxShadow: "0 4px 15px -3px rgba(0, 0, 0, 0.1)",
-                }}
-              >
-                検索条件に一致する読了の本はありません。
-              </div>
-            )}
-          </div>
-        </section>
+            </section>
+          </>
+        )}
       </main>
 
       {/* 編集モーダル */}
@@ -606,7 +686,7 @@ export default function App() {
               </div>
               <div className="flex gap-2 pt-4">
                 <button
-                  onClick={saveEdit}
+                  onClick={handleSaveEdit}
                   className="flex-1 px-4 py-2 rounded-xl text-white font-semibold"
                   style={{ backgroundColor: "#f97316" }}
                 >
@@ -626,4 +706,34 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// メインのAppコンポーネント
+export default function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          background: `
+          repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 12px,
+            rgba(255, 255, 255, 0.015) 12px,
+            rgba(255, 255, 255, 0.015) 24px
+          ),
+          linear-gradient(135deg, #1a4d3a 0%, #0f3d2a 30%, #1a4d3a 70%, #0f3d2a 100%),
+          radial-gradient(ellipse at top, rgba(255, 255, 255, 0.005) 0%, transparent 50%)
+        `,
+        }}
+      >
+        <div className="text-white text-lg">読み込み中...</div>
+      </div>
+    );
+  }
+
+  return user ? <BookApp /> : <AuthForm />;
 }
