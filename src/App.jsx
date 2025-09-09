@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import BookPile from "./components/BookPile.jsx";
 import LongPressCard from "./components/LongPressCard.jsx";
+import AuthForm from "./components/AuthForm.jsx";
+import { useAuth } from "./contexts/AuthContext.jsx";
 import {
   addBook,
   updateBook,
@@ -8,7 +10,8 @@ import {
   markBookAsRead,
   subscribeToBooks,
 } from "./firestore.js";
-export default function App() {
+function BookApp() {
+  const { user, logout } = useAuth();
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [pages, setPages] = useState("");
@@ -27,14 +30,20 @@ export default function App() {
 
   // Firestoreから本のデータをリアルタイムで取得
   useEffect(() => {
-    const unsubscribe = subscribeToBooks((booksData) => {
+    if (!user) {
+      setBooks([]);
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = subscribeToBooks(user.uid, (booksData) => {
       setBooks(booksData);
       setLoading(false);
       setError(null);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
   const filterBooks = (books) => {
     let filtered = books;
 
@@ -113,7 +122,7 @@ export default function App() {
     ...new Set(books.map((b) => b.author).filter((a) => a.trim())),
   ].sort();
   const handleAddBook = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || !user) return;
 
     try {
       setError(null);
@@ -123,7 +132,7 @@ export default function App() {
         pages: pages.trim() ? parseInt(pages) || 0 : 0,
       };
 
-      await addBook(bookData);
+      await addBook(user.uid, bookData);
       setTitle("");
       setAuthor("");
       setPages("");
@@ -133,9 +142,11 @@ export default function App() {
     }
   };
   const handleMarkRead = async (book) => {
+    if (!user) return;
+
     try {
       setError(null);
-      await markBookAsRead(book.id);
+      await markBookAsRead(user.uid, book.id);
     } catch (error) {
       setError("読了マークに失敗しました");
       console.error(error);
@@ -143,9 +154,11 @@ export default function App() {
   };
 
   const handleDeleteBook = async (bookId) => {
+    if (!user) return;
+
     try {
       setError(null);
-      await deleteBook(bookId);
+      await deleteBook(user.uid, bookId);
     } catch (error) {
       setError("本の削除に失敗しました");
       console.error(error);
@@ -158,7 +171,7 @@ export default function App() {
     setEditPages(book.pages || "");
   };
   const handleSaveEdit = async () => {
-    if (!editTitle.trim()) return;
+    if (!editTitle.trim() || !user) return;
 
     try {
       setError(null);
@@ -168,7 +181,7 @@ export default function App() {
         pages: editPages.trim() ? parseInt(editPages) || 0 : 0,
       };
 
-      await updateBook(editingBook.id, bookData);
+      await updateBook(user.uid, editingBook.id, bookData);
       setEditingBook(null);
       setEditTitle("");
       setEditAuthor("");
@@ -224,6 +237,16 @@ export default function App() {
                   className="w-full rounded-xl px-3 py-2 outline-none text-sm text-white"
                   style={{ backgroundColor: "rgba(255, 255, 255, 0.2)" }}
                 />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-white">{user?.email}</span>
+                <button
+                  onClick={logout}
+                  className="px-3 py-1 rounded-lg text-sm text-white hover:bg-red-600 transition-colors"
+                  style={{ backgroundColor: "rgba(239, 68, 68, 0.8)" }}
+                >
+                  ログアウト
+                </button>
               </div>
             </div>
             <div className="flex gap-4 flex-wrap">
@@ -683,4 +706,34 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// メインのAppコンポーネント
+export default function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          background: `
+          repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 12px,
+            rgba(255, 255, 255, 0.015) 12px,
+            rgba(255, 255, 255, 0.015) 24px
+          ),
+          linear-gradient(135deg, #1a4d3a 0%, #0f3d2a 30%, #1a4d3a 70%, #0f3d2a 100%),
+          radial-gradient(ellipse at top, rgba(255, 255, 255, 0.005) 0%, transparent 50%)
+        `,
+        }}
+      >
+        <div className="text-white text-lg">読み込み中...</div>
+      </div>
+    );
+  }
+
+  return user ? <BookApp /> : <AuthForm />;
 }
